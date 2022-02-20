@@ -88,6 +88,14 @@ func (node *Node) SetCenter(x, y int) {
 	node.centerY = y
 }
 
-func (node *Node) eq(n *Node) bool {
+func (node *Node) Equals(n *Node) bool {
 	return node.name == n.name
+}
+
+func (node *Node) LessThan(n *Node) bool {
+	return node.name < n.name
+}
+
+func (node *Node) ToString() string {
+	return node.name
 }
