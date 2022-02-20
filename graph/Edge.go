@@ -160,8 +160,8 @@ func PointingLeft(endpoint1, endpoint2 Endpoint) bool {
 	return endpoint1 == ARROW && (endpoint2 == TAIL || endpoint2 == CIRCLE)
 }
 
-func NewEdge(node1, node2 *Node, end1, end2 Endpoint) (Edge, error) {
-	var edge Edge
+func NewEdge(node1, node2 *Node, end1, end2 Endpoint) (*Edge, error) {
+	var edge *Edge
 	if node1 == nil || node2 == nil {
 		return edge, fmt.Errorf("nodes must not be nil")
 	}
@@ -169,14 +169,14 @@ func NewEdge(node1, node2 *Node, end1, end2 Endpoint) (Edge, error) {
 		return edge, fmt.Errorf("endpoints must not be NULL")
 	}
 	if PointingLeft(end1, end2) {
-		edge = Edge{
+		edge = &Edge{
 			node1:     node2,
 			node2:     node1,
 			endpoint1: end2,
 			endpoint2: end1,
 		}
 	} else {
-		edge = Edge{
+		edge = &Edge{
 			node1:     node1,
 			node2:     node2,
 			endpoint1: end1,
