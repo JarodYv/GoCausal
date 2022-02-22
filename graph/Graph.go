@@ -1,15 +1,10 @@
 package graph
 
 import (
+	"GoCausal/utils"
 	"fmt"
 	"gonum.org/v1/gonum/mat"
 )
-
-type Triple struct {
-	Node1 *Node
-	Node2 *Node
-	Node3 *Node
-}
 
 type IGraph interface {
 	AddBidirectedEdge(*Node, *Node)
@@ -41,7 +36,7 @@ type IGraph interface {
 	GetNodeEdges(*Node) []*Edge
 	GetConnectingEdges(*Node, *Node) []*Edge
 	GetGraphEdges() []*Edge
-	GetEndpoint(*Node, *Node)
+	GetEndpoint(*Node, *Node) Endpoint
 	GetInDegree(*Node) int
 	GetOutDegree(*Node) int
 	GetDegree(*Node) int
@@ -62,49 +57,48 @@ type IGraph interface {
 	DefNonDescendent(*Node, *Node)
 	IsDefNonCollider(*Node, *Node, *Node) bool
 	IsDefCollider(*Node, *Node, *Node) bool
-	IsDConnectedTo(*Node, *Node, *Node) bool
-	IsDSeparatedFrom(*Node, *Node, *Node) bool
+	IsDConnectedTo(*Node, *Node, []*Node) bool
+	IsDSeparatedFrom(*Node, *Node, []*Node) bool
 	MaybeDConnectedTo(*Node, *Node, *Node) bool
 	IsPattern() bool
 	SetPattern(bool)
 	IsPAG() bool
 	SetPAG(bool)
-	IsDirectedFromTo(Node, Node) bool
-	IsUndirectedFromTo(Node, Node) bool
-	DefVisible(Edge) bool
-	IsExogenous(Node) bool
-	GetNodesInto(Node, Endpoint) []Node
-	GetNodesOutOf(Node, Endpoint) []Node
-	RemoveEdge(Edge)
-	RemoveConnectingEdge(Node, Node)
-	RemoveConnectingEdges(Node, Node)
-	RemoveEdges([]Edge)
-	RemoveNode(Node)
-	RemoveNodes([]Node)
-	SetEndpoint(Node, Node, Endpoint)
-	Subgraph([]Node) IGraph
+	IsDirectedFromTo(*Node, *Node) bool
+	IsUndirectedFromTo(*Node, *Node) bool
+	DefVisible(*Edge) bool
+	IsExogenous(*Node) bool
+	GetNodesInto(*Node, Endpoint) []Node
+	GetNodesOutOf(*Node, Endpoint) []Node
+	RemoveEdge(*Edge)
+	RemoveConnectingEdge(*Node, *Node)
+	RemoveConnectingEdges(*Node, *Node)
+	RemoveEdges([]*Edge)
+	RemoveNode(*Node)
+	RemoveNodes([]*Node)
+	SetEndpoint(*Node, *Node, Endpoint)
 	TransferNodesAndEdges(IGraph)
 	TransferAttributes(IGraph)
 	GetAmbiguousTriples()
 	GetUnderlines()
 	GetDottedUnderlines()
-	IsAmbiguousTriple(Node, Node, Node) bool
-	IsUnderlineTriple(Node, Node, Node) bool
-	IsDottedUnderlineTriple(Node, Node, Node) bool
-	AddAmbiguousTriple(Node, Node, Node)
-	AddUnderlineTriple(Node, Node, Node)
-	AddDottedUnderlineTriple(Node, Node, Node)
-	RemoveAmbiguousTriple(Node, Node, Node)
-	RemoveUnderlineTriple(Node, Node, Node)
-	RemoveDottedUnderlineTriple(Node, Node, Node)
-	SetAmbiguousTriple(Node, Node, Node)
-	SetUnderlineTriple(Node, Node, Node)
-	SetDottedUnderlineTriple(Node, Node, Node)
+	IsAmbiguousTriple(*Node, *Node, *Node) bool
+	IsUnderlineTriple(*Node, *Node, *Node) bool
+	IsDottedUnderlineTriple(*Node, *Node, *Node) bool
+	AddAmbiguousTriple(*Node, *Node, *Node)
+	AddUnderlineTriple(*Node, *Node, *Node)
+	AddDottedUnderlineTriple(*Node, *Node, *Node)
+	RemoveAmbiguousTriple(*Node, *Node, *Node)
+	RemoveUnderlineTriple(*Node, *Node, *Node)
+	RemoveDottedUnderlineTriple(*Node, *Node, *Node)
+	SetAmbiguousTriple(*Node, *Node, *Node)
+	SetUnderlineTriple(*Node, *Node, *Node)
+	SetDottedUnderlineTriple(*Node, *Node, *Node)
 	GetCausalOrdering()
-	IsParameterizable(Node) bool
+	IsParameterizable(*Node) bool
 	IsTimeLagModel() bool
-	GetSepset(Node, Node) []Node
-	SetNodes([]Node)
+	GetSepset(*Node, *Node) []*Node
+	SetNodes([]*Node)
 }
 
 type Graph struct {
@@ -113,11 +107,11 @@ type Graph struct {
 	nodes                  []*Node
 	nodeMap                map[*Node]int
 	varNum                 int
-	graph                  mat.Dense
-	dPath                  mat.Dense
-	ambiguousTriples       []Triple
-	underlineTriples       []Triple
-	dottedUnderlineTriples []Triple
+	graph                  *mat.Dense
+	dPath                  *mat.Dense
+	ambiguousTriples       []*Triple
+	underlineTriples       []*Triple
+	dottedUnderlineTriples []*Triple
 	pattern                bool
 	pag                    bool
 }
@@ -134,26 +128,27 @@ func (g *Graph) adjustDPath(i, j int) {
 	}
 }
 
+func (g *Graph) updateNodeMap() {
+	nodeMap := map[*Node]int{}
+	for i, n := range g.nodes {
+		nodeMap[n] = i
+	}
+	g.nodeMap = nodeMap
+}
+
 func (g *Graph) reconstituteDPath(edges []*Edge) {
 	for i := 0; i < len(g.nodes); i++ {
 		g.adjustDPath(i, i)
 	}
-	for _, edge := range edges {
-		node1 := edge.GetNode1()
-		node2 := edge.GetNode2()
-		i := g.nodeMap[node1]
-		j := g.nodeMap[node2]
-		g.adjustDPath(i, j)
+	if edges != nil {
+		for _, edge := range edges {
+			node1 := edge.GetNode1()
+			node2 := edge.GetNode2()
+			i := g.nodeMap[node1]
+			j := g.nodeMap[node2]
+			g.adjustDPath(i, j)
+		}
 	}
-}
-
-func MapKeyInNodeSlice(haystack []*Node, needle *Node) bool {
-	set := make(map[*Node]struct{})
-	for _, e := range haystack {
-		set[e] = struct{}{}
-	}
-	_, ok := set[needle]
-	return ok
 }
 
 func (g *Graph) collectAncestors(node *Node, ancestors []*Node) {
@@ -297,7 +292,7 @@ func (g *Graph) AddNode(node *Node) bool {
 	}
 	g.nodes = append(g.nodes, node)
 	g.nodeMap[node] = g.varNum
-	g.varNum += 1
+	g.varNum++
 
 	return true
 }
@@ -501,7 +496,7 @@ func (g *Graph) GetInDegree(node *Node) int {
 	for j := 0; j < g.varNum; j++ {
 		e := Endpoint(g.graph.At(i, j))
 		if e == ARROW {
-			inDegree += 1
+			inDegree++
 		} else if e == ARROW_AND_ARROW {
 			inDegree += 2
 		}
@@ -520,7 +515,7 @@ func (g *Graph) GetOutDegree(node *Node) int {
 	for j := 0; j < g.varNum; j++ {
 		e := Endpoint(g.graph.At(i, j))
 		if e == TAIL || e == TAIL_AND_ARROW {
-			outDegree += 1
+			outDegree++
 		}
 	}
 	return outDegree
@@ -537,7 +532,7 @@ func (g *Graph) GetDegree(node *Node) int {
 	for j := 0; j < g.varNum; j++ {
 		e := Endpoint(g.graph.At(i, j))
 		if e == ARROW || e == TAIL || e == CIRCLE {
-			degree += 1
+			degree++
 		} else if e != NULL {
 			degree += 2
 		}
@@ -610,7 +605,7 @@ func (g *Graph) GetNumEdges() int {
 		for j := i + 1; j < g.varNum; j++ {
 			e := Endpoint(g.graph.At(i, j))
 			if e == ARROW || e == TAIL || e == CIRCLE {
-				edges += 1
+				edges++
 			} else if e != NULL {
 				edges += 2
 			}
@@ -630,7 +625,7 @@ func (g *Graph) GetNumConnectedEdges(node *Node) int {
 	for j := 0; j < g.varNum; j++ {
 		e := Endpoint(g.graph.At(j, i))
 		if e == ARROW || e == TAIL || e == CIRCLE {
-			edges += 1
+			edges++
 		} else if e != NULL {
 			edges += 2
 		}
@@ -831,4 +826,428 @@ func (g *Graph) GetGraphEdges() []*Edge {
 		}
 	}
 	return edges
+}
+
+/*
+GetEndpoint
+
+Returns the endpoint along the edge from node1 to node2, at the node2 end.
+*/
+func (g *Graph) GetEndpoint(node1, node2 *Node) Endpoint {
+	edge := g.GetEdge(node1, node2)
+	if edge != nil {
+		return edge.GetProximalEndpoint(node2)
+	} else {
+		return NULL
+	}
+}
+
+/*
+IsDefNonCollider
+
+Returns true if node2 is a definite non-collider between node1 and node3.
+*/
+func (g *Graph) IsDefNonCollider(node1, node2, node3 *Node) bool {
+	edges := g.GetNodeEdges(node2)
+	circle12 := false
+	circle23 := false
+	for _, edge := range edges {
+		n := edge.GetDistalNode(node2)
+		_node1 := false
+		_node3 := false
+		if n != nil {
+			_node1 = n.Equals(node1)
+			_node3 = n.Equals(node3)
+		}
+		if _node1 && edge.PointsToward(node1) {
+			return true
+		}
+		if _node3 && edge.PointsToward(node3) {
+			return true
+		}
+
+		isCircle := edge.GetProximalEndpoint(node2) == CIRCLE
+		circle12 = _node1 && isCircle
+		circle23 = _node3 && isCircle
+
+		if circle12 && circle23 && !g.IsAdjacentTo(node1, node2) {
+			return true
+		}
+	}
+	return false
+}
+
+/*
+IsDefCollider
+
+Returns true if node2 is a definite collider between node1 and node3.
+*/
+func (g *Graph) IsDefCollider(node1, node2, node3 *Node) bool {
+	edge1 := g.GetEdge(node1, node2)
+	edge2 := g.GetEdge(node2, node3)
+	if edge1 == nil || edge2 == nil {
+		return false
+	}
+	return edge1.GetProximalEndpoint(node2) == ARROW && edge2.GetProximalEndpoint(node2) == ARROW
+}
+
+/*
+IsDefUnshieldedCollider
+*/
+func (g *Graph) IsDefUnshieldedCollider(node1, node2, node3 *Node) bool {
+	return g.IsDefCollider(node1, node2, node3) && !g.IsDirectlyConnectedTo(node1, node3)
+}
+
+/*
+IsDConnectedTo
+
+Returns true if node1 and node2 are d-connected on the set of nodes z.
+*/
+func (g *Graph) IsDConnectedTo(node1, node2 *Node, z []*Node) bool {
+	return IsDConnectedTo(node1, node2, z, g)
+}
+
+/*
+IsDSeparatedFrom
+
+Returns true if node1 and node2 are d-separated on the set of nodes z.
+*/
+func (g *Graph) IsDSeparatedFrom(node1, node2 *Node, z []*Node) bool {
+	return !g.IsDConnectedTo(node1, node2, z)
+}
+
+/*
+IsPattern
+
+Returns true if the graph is a pattern.
+*/
+func (g *Graph) IsPattern() bool {
+	return g.pattern
+}
+
+func (g *Graph) SetPattern(pat bool) {
+	g.pattern = pat
+}
+
+/*
+IsPag
+
+Returns true if the graph is a PAG.
+*/
+func (g *Graph) IsPag() bool {
+	return g.pag
+}
+
+func (g *Graph) SetPag(pag bool) {
+	g.pag = pag
+}
+
+/*
+IsDirectedFromTo
+
+Returns true iff there is a single directed edge from node1 to node2.
+*/
+func (g *Graph) IsDirectedFromTo(node1, node2 *Node) bool {
+	i := g.nodeMap[node1]
+	j := g.nodeMap[node2]
+
+	return g.graph.At(j, i) == 1 && g.graph.At(i, j) == -1
+}
+
+/*
+IsUndirectedFromTo
+
+Returns true iff there is a single undirected edge between node1 and node2.
+*/
+func (g *Graph) IsUndirectedFromTo(node1, node2 *Node) bool {
+	i := g.nodeMap[node1]
+	j := g.nodeMap[node2]
+
+	return g.graph.At(j, i) == -1 && g.graph.At(i, j) == -1
+}
+
+/*
+IsDirectlyConnectedTo
+
+Returns true iff there is a single undirected edge between node1 and node2.
+*/
+func (g *Graph) IsDirectlyConnectedTo(node1, node2 *Node) bool {
+	i := g.nodeMap[node1]
+	j := g.nodeMap[node2]
+
+	return !(g.graph.At(j, i) == 0 && g.graph.At(i, j) == 0)
+}
+
+/*
+IsExogenous
+
+Returns true iff the given node is exogenous.
+*/
+func (g *Graph) IsExogenous(node *Node) bool {
+	return g.GetInDegree(node) == 0
+}
+
+/*
+GetNodesOutOf
+
+Returns the nodes adjacent to the given node with the given distal endpoint.
+*/
+func (g *Graph) GetNodesOutOf(node *Node, endpoint Endpoint) []*Node {
+	i := g.nodeMap[node]
+	var nodes []*Node
+	if endpoint == ARROW || endpoint == TAIL || endpoint == CIRCLE {
+		for j := 0; j < g.varNum; j++ {
+			e := Endpoint(g.graph.At(j, i))
+			if endpoint == ARROW && (e == ARROW || e == ARROW_AND_ARROW) ||
+				endpoint == TAIL && (e == TAIL || e == TAIL_AND_ARROW) ||
+				endpoint == CIRCLE && e == CIRCLE {
+				n := g.nodes[j]
+				nodes = append(nodes, n)
+			}
+		}
+
+	} else if endpoint == TAIL {
+
+	} else if endpoint == CIRCLE {
+
+	}
+	return nodes
+}
+
+func (g *Graph) RemoveEdge(edge *Edge) {
+	node1 := edge.GetNode1()
+	node2 := edge.GetNode2()
+
+	i := g.nodeMap[node1]
+	j := g.nodeMap[node2]
+
+	outOf := Endpoint(g.graph.At(j, i))
+	inTo := Endpoint(g.graph.At(i, j))
+
+	end1 := edge.GetEndpoint1()
+	end2 := edge.GetEndpoint2()
+	if outOf == TAIL_AND_ARROW && inTo == TAIL_AND_ARROW {
+		if end1 == ARROW {
+			g.graph.Set(j, i, -1)
+			g.graph.Set(i, j, -1)
+		} else if end1 == TAIL {
+			g.graph.Set(i, j, 1)
+			g.graph.Set(j, i, 1)
+		}
+	} else if outOf == ARROW_AND_ARROW && inTo == TAIL_AND_ARROW {
+		if end1 == ARROW {
+			g.graph.Set(j, i, -1)
+			g.graph.Set(i, j, -1)
+		} else if end1 == TAIL {
+			g.graph.Set(i, j, 1)
+			g.graph.Set(j, i, 1)
+		}
+	} else if outOf == TAIL_AND_ARROW && inTo == ARROW_AND_ARROW {
+		if end1 == ARROW {
+			g.graph.Set(j, i, -1)
+			g.graph.Set(i, j, 1)
+		} else if end1 == TAIL {
+			g.graph.Set(i, j, 1)
+			g.graph.Set(j, i, 1)
+		}
+	} else {
+		if end1 == inTo && end2 == outOf {
+			g.graph.Set(j, i, 0)
+			g.graph.Set(i, j, 0)
+		}
+	}
+}
+
+/*
+RemoveConnectingEdge
+
+Removes the edge connecting the given two nodes, provided there is exactly one such edge.
+*/
+func (g *Graph) RemoveConnectingEdge(node1, node2 *Node) {
+	i := g.nodeMap[node1]
+	j := g.nodeMap[node2]
+	g.graph.Set(j, i, 0)
+	g.graph.Set(i, j, 0)
+}
+
+/*
+RemoveConnectingEdges
+
+Removes all edges connecting node A to node B.
+In most cases, this will remove at most one edge, but since multiple edges are permitted
+in some graph implementations, the number will in some cases be greater than one.
+*/
+func (g *Graph) RemoveConnectingEdges(node1, node2 *Node) {
+	i := g.nodeMap[node1]
+	j := g.nodeMap[node2]
+	g.graph.Set(j, i, 0)
+	g.graph.Set(i, j, 0)
+}
+
+/*
+RemoveEdges
+
+Iterates through the list and removes any permissible edges found.
+The order in which edges are removed is the order in which they are presented in the iterator.
+*/
+func (g *Graph) RemoveEdges(edges []*Edge) {
+	for _, e := range edges {
+		g.RemoveEdge(e)
+	}
+}
+
+/*
+RemoveNode
+
+Removes a node from the graph.
+*/
+func (g *Graph) RemoveNode(node *Node) {
+	i := g.nodeMap[node]
+	err := utils.RemoveRowCol(i, i, g.graph)
+	if err != nil {
+		panic(err.Error())
+	}
+	g.updateNodeMap()
+	g.varNum--
+}
+
+/*
+RemoveNodes
+
+Iterates through the list and removes any permissible nodes found.
+The order in which nodes are removed is the order in which they are presented in the iterator.
+*/
+func (g *Graph) RemoveNodes(nodes []*Node) {
+	for _, node := range nodes {
+		g.RemoveNode(node)
+	}
+}
+
+/*
+Subgraph
+
+Constructs and returns a subgraph consisting of a given subset of the
+nodes of this graph together with the edges between them.
+*/
+func (g *Graph) Subgraph(nodes []*Node) *Graph {
+	subgraph := NewGraph(nodes)
+	graph := mat.DenseCopyOf(g.graph)
+	for i := 0; i < g.varNum; i++ {
+		if !MapKeyInNodeSlice(nodes, g.nodes[i]) {
+			_ = utils.RemoveRowCol(i, i, graph)
+		}
+	}
+	subgraph.graph = graph
+	subgraph.reconstituteDPath(subgraph.GetGraphEdges())
+	return subgraph
+}
+
+func (g *Graph) ToString() string {
+	nodes := g.GetNodes()
+	edges := g.GetGraphEdges()
+
+	graphString := "Graph Nodes:\n"
+	for _, n := range nodes {
+		graphString += fmt.Sprintf("%s;", n.GetName())
+	}
+	if len(nodes) > 0 {
+		graphString = graphString[:len(graphString)-1]
+	}
+	graphString += "\n\nGraph Edges:\n"
+	for i, e := range edges {
+		graphString += fmt.Sprintf("%d. %s\n", i, e.ToString())
+	}
+	return graphString
+}
+
+/*
+TransferNodesAndEdges
+
+Transfers nodes and edges from one graph to another.
+One way this is used is to change graph types.
+One constructs a new graph based on the old graph,
+and this method is called to transfer the nodes and edges of the old graph to the new graph.
+*/
+func (g *Graph) TransferNodesAndEdges(graph *Graph) {
+	for _, n := range graph.nodes {
+		g.AddNode(n)
+	}
+	for _, e := range graph.GetGraphEdges() {
+		g.AddEdge(e)
+	}
+}
+
+func (g *Graph) TransferAttributes(graph *Graph) {
+	g.attributes = graph.attributes
+}
+
+/*
+GetAmbiguousTriples
+
+Returns the list of ambiguous triples associated with this graph.
+Triples <x, y, z> that no longer lie along a path in the getModel graph are removed.
+*/
+func (g *Graph) GetAmbiguousTriples() []*Triple {
+	return g.ambiguousTriples
+}
+
+/*
+GetUnderlines
+
+Returns the set of underlines associated with this graph.
+*/
+func (g *Graph) GetUnderlines() []*Triple {
+	return g.underlineTriples
+}
+
+/*
+GetDottedUnderlines
+
+Returns the set of dotted underlines associated with this graph.
+*/
+func (g *Graph) GetDottedUnderlines() []*Triple {
+	return g.dottedUnderlineTriples
+}
+
+func (g *Graph) IsAmbiguousTriple(triple *Triple) bool {
+	// FIXME
+	return false
+}
+
+func (g *Graph) IsUnderlineTriple(triple *Triple) bool {
+	// FIXME
+	return false
+}
+
+func (g *Graph) IsDottedUnderlineTriple(triple *Triple) bool {
+	// FIXME
+	return false
+}
+
+func (g *Graph) AddAmbiguousTriple(triple *Triple) {
+	g.ambiguousTriples = append(g.ambiguousTriples, triple)
+}
+
+func (g *Graph) AddUnderlineTriple(triple *Triple) {
+	g.underlineTriples = append(g.underlineTriples, triple)
+}
+
+func (g *Graph) AddDottedUnderlineTriple(triple *Triple) {
+	g.dottedUnderlineTriples = append(g.dottedUnderlineTriples, triple)
+}
+
+func NewGraph(nodes []*Node) *Graph {
+	n := len(nodes)
+	graph := Graph{
+		nodes:   nodes,
+		varNum:  n,
+		graph:   mat.NewDense(n, n, nil),
+		dPath:   mat.NewDense(n, n, nil),
+		nodeMap: map[*Node]int{},
+		pattern: false,
+		pag:     false,
+	}
+	graph.reconstituteDPath(nil)
+	graph.updateNodeMap()
+	return &graph
 }

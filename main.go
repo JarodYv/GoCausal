@@ -2,6 +2,7 @@ package main
 
 import (
 	"GoCausal/graph"
+	"GoCausal/utils"
 	"fmt"
 )
 
@@ -18,4 +19,13 @@ func main() {
 	fmt.Println(node2)
 	changeType(&node1)
 	fmt.Println(node1)
+
+	q := utils.LinkedQueue{}
+	q.Append("1")
+	q.Append("2")
+	q.Append("3")
+	fmt.Println(q)
+	fmt.Println(q.Contains("4"))
+	fmt.Println(q.Pop())
+	fmt.Println(q)
 }

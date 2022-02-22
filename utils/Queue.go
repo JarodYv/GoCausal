@@ -45,3 +45,14 @@ func (queue *LinkedQueue) Pop() interface{} {
 	queue.size--
 	return firstElem
 }
+
+func (queue *LinkedQueue) Contains(i interface{}) bool {
+	node := queue.head
+	for node != nil {
+		if node.value == i {
+			return true
+		}
+		node = node.next
+	}
+	return false
+}
